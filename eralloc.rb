@@ -193,7 +193,7 @@ def emit(expr, map, free_regs, all_regs, base_offset)
         shamt = free_regs[-2]
 
         # shifting requires the shamt to be in ecx (specific cl, which is the
-        #  low 16 bits)
+        # low 16 bits)
         #
         # the additional constraint is that the result must have the same
         # register as whatever is in shifted.
