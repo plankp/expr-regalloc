@@ -23,7 +23,7 @@ class ERAlloc
         case expr[0]
         when "Numeric", "RefVar", "RefExt", "Load"
             return @ershov_labels[expr] = 1
-        when "Add", "Sub", "Mul", "Div", "Rem", "Shl", "Sra", "Srl"
+        when "Add", "Sub", "Mul", "Div", "Rem", "Shl", "Sra", "Srl", "Store"
             lhs = self.ershov(expr[1])
             rhs = self.ershov(expr[2])
 
@@ -53,7 +53,7 @@ class ERAlloc
             body = self.emit(expr[1], free_regs, base_offset)
             body << "mov #{free_regs.last}, [#{free_regs.last}]"
             return body
-        when "Add", "Sub", "Mul"
+        when "Add", "Sub", "Mul", "Store"
             lhs_num = @ershov_labels[expr[1]]
             rhs_num = @ershov_labels[expr[2]]
 
@@ -94,6 +94,11 @@ class ERAlloc
                 body += ["sub #{free_regs[-1]}, #{free_regs[-2]}"]
             when "Mul"
                 body += ["imul #{free_regs[-1]}, #{free_regs[-2]}"]
+            when "Store"
+                # It's reversed because it's ["Store", value, ptr], note that
+                # the value being stored is propagated as the result, not the
+                # pointer.
+                body += ["mov [#{free_regs[-2]}], #{free_regs[-1]}"]
             end
 
             if need_spilling then
@@ -416,4 +421,8 @@ puts
 puts eralloc(["Call", ["RefVar", "fn"],
         ["Shl", ["Numeric", 8], ["Load", ["RefVar", "p"]]],
         ["Shl", ["Numeric", 10], ["Load", ["RefVar", "q"]]]])
+puts
+puts eralloc(["Store", ["Numeric", 7779], ["RefVar", "p"]])
+puts
+puts eralloc(["Store", ["Store", ["Numeric", 7779], ["RefVar", "q"]], ["RefVar", "p"]])
 puts
