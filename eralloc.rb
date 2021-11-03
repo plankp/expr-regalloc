@@ -21,7 +21,7 @@ class ERAlloc
 
     def ershov(expr)
         case expr[0]
-        when "Numeric", "RefVar", "Load"
+        when "Numeric", "RefVar", "RefExt", "Load"
             return @ershov_labels[expr] = 1
         when "Add", "Sub", "Mul", "Div", "Rem", "Shl", "Sra", "Srl"
             lhs = self.ershov(expr[1])
@@ -45,6 +45,10 @@ class ERAlloc
             return ["mov #{free_regs.last}, #{expr[1]}"]
         when "RefVar"
             return ["lea #{free_regs.last}, [ebp-#{expr[1]}]"]
+        when "RefExt"
+            return [
+                "extern #{expr[1]}",
+                "mov #{free_regs.last}, #{expr[1]}" ]
         when "Load"
             body = self.emit(expr[1], free_regs, base_offset)
             body << "mov #{free_regs.last}, [#{free_regs.last}]"
@@ -404,6 +408,8 @@ puts
 puts eralloc(["Call", ["RefVar", "foo"], ["Load", ["RefVar", "p"]]])
 puts
 puts eralloc(["Call", ["RefVar", "foo"], ["Load", ["RefVar", "p"]]])
+puts
+puts eralloc(["Call", ["RefExt", "foo"], ["Load", ["RefVar", "p"]]])
 puts
 puts eralloc(["Call", ["Numeric", 7779], ["Load", ["RefVar", "p"]]])
 puts
