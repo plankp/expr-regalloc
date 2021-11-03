@@ -1,6 +1,6 @@
 # Expr RegAlloc
 
-> don't remember what the description was... But I'll update it... eventually :trollface:
+Let's learn (some form of) register allocation for real this time... 
 
 ## No seriously what is this?
 
