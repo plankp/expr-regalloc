@@ -14,8 +14,10 @@ def emit(expr, map, free_regs, all_regs, base_offset)
     case expr[0]
     when "Numeric"
         return ["mov #{free_regs.last}, #{expr[1]}"]
-    when "Variable"
+    when "ReadVar"
         return ["mov #{free_regs.last}, [ebp-#{expr[1]}]"]
+    when "RefVar"
+        return ["lea #{free_regs.last}, [ebp-#{expr[1]}]"]
     when "Add", "Sub", "Mul"
         lhs_num = map[expr[1]]
         rhs_num = map[expr[2]]
@@ -224,113 +226,158 @@ def emit(expr, map, free_regs, all_regs, base_offset)
         end
 
         return body
+    when "Call"
+        # the simplest way to do this is the following:
+        # 1. evaluate the arguments from last to first (also push them in that
+        #    order)
+        # 2. evaluate the callsite
+        # 3. issue the call instruction
+        # 4. move the result from eax
+        # 5. pop-off all the arguments
+
+        raise "OUT OF REGS" if free_regs.length < 1
+
+        body = []
+        expr[2..].reverse_each do |arg|
+            body += emit(arg, map, free_regs, all_regs, base_offset)
+            body << "push #{free_regs.last}"
+        end
+
+        body += emit(expr[1], map, free_regs, all_regs, base_offset)
+        body << "call eax"
+        body << "mov #{free_regs.last}, eax" unless free_regs.last == "eax"
+        body << "add esp, #{4 * (expr.length - 2)}" unless expr.length < 3
+
+        return body
     end
 end
 
 def ershov(expr, map)
     case expr[0]
-    when "Numeric", "Variable"
+    when "Numeric", "ReadVar", "RefVar"
         return map[expr] = 1
     when "Add", "Sub", "Mul", "Div", "Rem", "Shl", "Sra", "Srl"
         lhs = ershov(expr[1], map)
         rhs = ershov(expr[2], map)
 
         return map[expr] = lhs == rhs ? lhs + 1 : [lhs, rhs].max
+    when "Call"
+        # function calls are special because the amount of register (and what
+        # registers they use) are dictated by the calling convention.
+
+        # Regardless of calling convention, we must compute the call site as
+        # well as the arguments to the call.
+        expr[2..].each {|arg| ershov(arg, map)}
+        return map[expr] = ershov(expr[1], map)
     end
 end
 
-puts eralloc(["Numeric", 123])
+# puts eralloc(["Numeric", 123])
+# puts
+# puts eralloc(["ReadVar", "foo"])
+# puts
+# puts eralloc(["Add", ["Numeric", 123], ["Numeric", 456]])
+# puts
+# puts eralloc(["Add", ["ReadVar", "foo"], ["Numeric", 456]])
+# puts
+# puts eralloc(["Add", ["Numeric", 456], ["ReadVar", "foo"]])
+# puts
+# puts eralloc(["Add", ["ReadVar", "foo"], ["Numeric", 456]])
+# puts
+# puts eralloc(["Add", ["ReadVar", "foo"], ["Add", ["Numeric", 456], ["Numeric", 789]]])
+# puts
+# puts eralloc(["Add",
+#         ["Add", ["ReadVar", "foo"], ["Numeric", 456]],
+#         ["Add", ["Numeric", 123], ["Numeric", 789]]])
+# puts
+# puts eralloc(["Add",
+#         ["Add", ["Add", ["ReadVar", "foo"], ["Numeric", 222]],
+#                 ["Add", ["ReadVar", "bar"], ["Numeric", 111]]],
+#         ["Add", ["Numeric", 123], ["Numeric", 789]]])
+# puts
+# puts eralloc(["Mul", ["ReadVar", "foo"], ["Numeric", 456]])
+# puts
+# puts eralloc(["Mul", ["ReadVar", "foo"], ["Mul", ["Numeric", 456], ["Numeric", 789]]])
+# puts
+# puts eralloc(["Sub", ["Numeric", 123], ["Numeric", 456]])
+# puts
+# puts eralloc(["Sub", ["ReadVar", "foo"], ["Numeric", 456]])
+# puts
+# puts eralloc(["Sub", ["Numeric", 456], ["ReadVar", "foo"]])
+# puts
+# puts eralloc(["Sub", ["ReadVar", "foo"], ["Numeric", 456]])
+# puts
+# puts eralloc(["Mul",
+#     ["Add", ["Add", ["ReadVar", "b"], ["ReadVar", "c"]],
+#             ["Mul", ["ReadVar", "f"], ["ReadVar", "g"]]],
+#     ["Add", ["ReadVar", "d"], ["Numeric", 3]]])
+# puts
+# puts eralloc(["Mul",
+#     ["Add", ["ReadVar", "d"], ["Numeric", 3]],
+#     ["Add", ["Add", ["ReadVar", "b"], ["ReadVar", "c"]],
+#             ["Mul", ["ReadVar", "f"], ["ReadVar", "g"]]]])
+# puts
+# puts eralloc(["Sub",
+#     ["Add", ["Add", ["ReadVar", "b"], ["ReadVar", "c"]],
+#             ["Mul", ["ReadVar", "f"], ["ReadVar", "g"]]],
+#     ["Add", ["ReadVar", "d"], ["Numeric", 3]]])
+# puts
+# puts eralloc(["Sub",
+#     ["Add", ["ReadVar", "d"], ["Numeric", 3]],
+#     ["Add", ["Add", ["ReadVar", "b"], ["ReadVar", "c"]],
+#             ["Mul", ["ReadVar", "f"], ["ReadVar", "g"]]]])
+# puts
+# puts eralloc(["Div", ["ReadVar", "p"], ["ReadVar", "q"]])
+# puts
+# puts eralloc(["Div", ["Add", ["Numeric", 10], ["ReadVar", "p"]], ["ReadVar", "q"]])
+# puts
+# puts eralloc(["Div", ["ReadVar", "p"], ["Add", ["Numeric", 10], ["ReadVar", "q"]]])
+# puts
+# puts eralloc(["Div",
+#         ["Add", ["Numeric", 8], ["ReadVar", "p"]],
+#         ["Add", ["Numeric", 10], ["ReadVar", "q"]]])
+# puts
+# puts eralloc(["Div",
+#         ["Div", ["Numeric", 8], ["ReadVar", "p"]],
+#         ["Div", ["Numeric", 10], ["ReadVar", "q"]]])
+# puts
+# puts eralloc(["Div",
+#     ["Div", ["Div", ["ReadVar", "qq"], ["ReadVar", "rr"]],
+#             ["Div", ["ReadVar", "ss"], ["ReadVar", "tt"]]],
+#     ["Div", ["Div", ["ReadVar", "b"], ["ReadVar", "c"]],
+#             ["Div", ["ReadVar", "f"], ["ReadVar", "g"]]]])
+# puts
+# puts eralloc(["Shl", ["ReadVar", "x"], ["Numeric", 8]])
+# puts
+# puts eralloc(["Shl", ["Add", ["Numeric", 10], ["ReadVar", "p"]], ["ReadVar", "q"]])
+# puts
+# puts eralloc(["Shl", ["ReadVar", "p"], ["Add", ["Numeric", 10], ["ReadVar", "q"]]])
+# puts
+# puts eralloc(["Shl",
+#         ["Add", ["Numeric", 8], ["ReadVar", "p"]],
+#         ["Add", ["Numeric", 10], ["ReadVar", "q"]]])
+# puts
+# puts eralloc(["Shl",
+#         ["Shl", ["Numeric", 8], ["ReadVar", "p"]],
+#         ["Shl", ["Numeric", 10], ["ReadVar", "q"]]])
+# puts
+# puts eralloc(["Shl",
+#     ["Shl", ["Shl", ["ReadVar", "qq"], ["ReadVar", "rr"]],
+#             ["Shl", ["ReadVar", "ss"], ["ReadVar", "tt"]]],
+#     ["Shl", ["Shl", ["ReadVar", "b"], ["ReadVar", "c"]],
+#             ["Shl", ["ReadVar", "f"], ["ReadVar", "g"]]]])
+# puts
+puts eralloc(["Call", ["ReadVar", "foo"]])
 puts
-puts eralloc(["Variable", "foo"])
+puts eralloc(["Call", ["RefVar", "foo"]])
 puts
-puts eralloc(["Add", ["Numeric", 123], ["Numeric", 456]])
+puts eralloc(["Call", ["RefVar", "foo"], ["ReadVar", "p"]])
 puts
-puts eralloc(["Add", ["Variable", "foo"], ["Numeric", 456]])
+puts eralloc(["Call", ["RefVar", "foo"], ["ReadVar", "p"]])
 puts
-puts eralloc(["Add", ["Numeric", 456], ["Variable", "foo"]])
+puts eralloc(["Call", ["Numeric", 7779], ["ReadVar", "p"]])
 puts
-puts eralloc(["Add", ["Variable", "foo"], ["Numeric", 456]])
-puts
-puts eralloc(["Add", ["Variable", "foo"], ["Add", ["Numeric", 456], ["Numeric", 789]]])
-puts
-puts eralloc(["Add",
-        ["Add", ["Variable", "foo"], ["Numeric", 456]],
-        ["Add", ["Numeric", 123], ["Numeric", 789]]])
-puts
-puts eralloc(["Add",
-        ["Add", ["Add", ["Variable", "foo"], ["Numeric", 222]],
-                ["Add", ["Variable", "bar"], ["Numeric", 111]]],
-        ["Add", ["Numeric", 123], ["Numeric", 789]]])
-puts
-puts eralloc(["Mul", ["Variable", "foo"], ["Numeric", 456]])
-puts
-puts eralloc(["Mul", ["Variable", "foo"], ["Mul", ["Numeric", 456], ["Numeric", 789]]])
-puts
-puts eralloc(["Sub", ["Numeric", 123], ["Numeric", 456]])
-puts
-puts eralloc(["Sub", ["Variable", "foo"], ["Numeric", 456]])
-puts
-puts eralloc(["Sub", ["Numeric", 456], ["Variable", "foo"]])
-puts
-puts eralloc(["Sub", ["Variable", "foo"], ["Numeric", 456]])
-puts
-puts eralloc(["Mul",
-    ["Add", ["Add", ["Variable", "b"], ["Variable", "c"]],
-            ["Mul", ["Variable", "f"], ["Variable", "g"]]],
-    ["Add", ["Variable", "d"], ["Numeric", 3]]])
-puts
-puts eralloc(["Mul",
-    ["Add", ["Variable", "d"], ["Numeric", 3]],
-    ["Add", ["Add", ["Variable", "b"], ["Variable", "c"]],
-            ["Mul", ["Variable", "f"], ["Variable", "g"]]]])
-puts
-puts eralloc(["Sub",
-    ["Add", ["Add", ["Variable", "b"], ["Variable", "c"]],
-            ["Mul", ["Variable", "f"], ["Variable", "g"]]],
-    ["Add", ["Variable", "d"], ["Numeric", 3]]])
-puts
-puts eralloc(["Sub",
-    ["Add", ["Variable", "d"], ["Numeric", 3]],
-    ["Add", ["Add", ["Variable", "b"], ["Variable", "c"]],
-            ["Mul", ["Variable", "f"], ["Variable", "g"]]]])
-puts
-puts eralloc(["Div", ["Variable", "p"], ["Variable", "q"]])
-puts
-puts eralloc(["Div", ["Add", ["Numeric", 10], ["Variable", "p"]], ["Variable", "q"]])
-puts
-puts eralloc(["Div", ["Variable", "p"], ["Add", ["Numeric", 10], ["Variable", "q"]]])
-puts
-puts eralloc(["Div",
-        ["Add", ["Numeric", 8], ["Variable", "p"]],
-        ["Add", ["Numeric", 10], ["Variable", "q"]]])
-puts
-puts eralloc(["Div",
-        ["Div", ["Numeric", 8], ["Variable", "p"]],
-        ["Div", ["Numeric", 10], ["Variable", "q"]]])
-puts
-puts eralloc(["Div",
-    ["Div", ["Div", ["Variable", "qq"], ["Variable", "rr"]],
-            ["Div", ["Variable", "ss"], ["Variable", "tt"]]],
-    ["Div", ["Div", ["Variable", "b"], ["Variable", "c"]],
-            ["Div", ["Variable", "f"], ["Variable", "g"]]]])
-puts
-puts eralloc(["Shl", ["Variable", "x"], ["Numeric", 8]])
-puts
-puts eralloc(["Shl", ["Add", ["Numeric", 10], ["Variable", "p"]], ["Variable", "q"]])
-puts
-puts eralloc(["Shl", ["Variable", "p"], ["Add", ["Numeric", 10], ["Variable", "q"]]])
-puts
-puts eralloc(["Shl",
-        ["Add", ["Numeric", 8], ["Variable", "p"]],
-        ["Add", ["Numeric", 10], ["Variable", "q"]]])
-puts
-puts eralloc(["Shl",
-        ["Shl", ["Numeric", 8], ["Variable", "p"]],
-        ["Shl", ["Numeric", 10], ["Variable", "q"]]])
-puts
-puts eralloc(["Shl",
-    ["Shl", ["Shl", ["Variable", "qq"], ["Variable", "rr"]],
-            ["Shl", ["Variable", "ss"], ["Variable", "tt"]]],
-    ["Shl", ["Shl", ["Variable", "b"], ["Variable", "c"]],
-            ["Shl", ["Variable", "f"], ["Variable", "g"]]]])
+puts eralloc(["Call", ["RefVar", "fn"],
+        ["Shl", ["Numeric", 8], ["ReadVar", "p"]],
+        ["Shl", ["Numeric", 10], ["ReadVar", "q"]]])
 puts
