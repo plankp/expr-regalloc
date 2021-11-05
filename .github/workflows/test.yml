@@ -1,0 +1,24 @@
+name: Run Tests
+
+on:
+  push:
+  pull_request:
+    branches: main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+  steps:
+  - uses: action/checkout@v2
+  - name: Set up JDK 16
+    uses: actions/steup-java@v2
+    with:
+      java-version: '16'
+      distribution: 'adopt'
+      cache: gradle
+  - name: Grant execution permission for gradlew
+    run: chmod +x gradlew
+  - name: Build with gradle
+    run: ./gradlew build -xtest
+  - name: Run test
+    run: ./gradlew test
