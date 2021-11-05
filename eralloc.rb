@@ -274,10 +274,21 @@ class ERAlloc
             # 3. issue the call instruction
             # 4. move the result from eax
             # 5. pop-off all the arguments
+            #
+            # also watch out for caller saved registers being wiped!
 
             raise "OUT OF REGS" if free_regs.length < 1
 
             body = []
+
+            # make sure the caller saved registers are properly saved if they
+            # are currently in use.
+            corrupted = ['eax', 'ecx', 'edx'] - free_regs
+            corrupted.each do |r|
+                body << "mov [ebp-#{base_offset}], #{r}"
+                self.update_offset(base_offset += 4)
+            end
+
             expr[2..].reverse_each do |arg|
                 body += emit(arg, free_regs, base_offset)
                 body << "push #{free_regs.last}"
@@ -287,6 +298,11 @@ class ERAlloc
             body << "call eax"
             body << "mov #{free_regs.last}, eax" unless free_regs.last == "eax"
             body << "add esp, #{4 * (expr.length - 2)}" unless expr.length < 3
+
+            corrupted.reverse_each do |r|
+                base_offset -= 4
+                body << "mov #{r}, [ebp-#{base_offset}]"
+            end
 
             return body
         end
@@ -421,6 +437,10 @@ puts
 puts eralloc(["Call", ["RefVar", "fn"],
         ["Shl", ["Numeric", 8], ["Load", ["RefVar", "p"]]],
         ["Shl", ["Numeric", 10], ["Load", ["RefVar", "q"]]]])
+puts
+puts eralloc(["Add",
+        ["Add", ["RefExt", "f8"], ["Load", ["RefVar", "p"]]],
+        ["Call", ["RefExt", "f10"], ["Load", ["RefVar", "q"]]]])
 puts
 puts eralloc(["Store", ["Numeric", 7779], ["RefVar", "p"]])
 puts
