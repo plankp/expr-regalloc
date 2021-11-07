@@ -104,4 +104,42 @@ public class ERAllocTest {
                 Arrays.asList("mov eax, 2", "push eax", "extern f", "mov eax, f", "call eax", "add esp, 4"),
                 ERAlloc.codegen(new CallExpr(new GlobalValue("f"), new Numeric(2))));
     }
+
+    @Test
+    public void testSpilling() {
+        assertEquals(
+                Arrays.asList(
+                    "extern v4",
+                    "mov eax, v4",
+                    "mov eax, [eax]",
+                    "mov ecx, 22",
+                    "sub eax, ecx",
+                    "extern v8",
+                    "mov ecx, v8",
+                    "mov ecx, [ecx]",
+                    "mov edx, 11",
+                    "sub ecx, edx",
+                    "sub eax, ecx",
+                    "extern v12",
+                    "mov ecx, v12",
+                    "mov ecx, [ecx]",
+                    "mov edx, 3",
+                    "sub ecx, edx",
+                    "mov [ebp-4], eax",
+                    "extern v16",
+                    "mov edx, v16",
+                    "mov edx, [edx]",
+                    "mov eax, 9",
+                    "sub edx, eax",
+                    "mov eax, [ebp-4]",
+                    "sub ecx, edx",
+                    "sub eax, ecx"),
+                ERAlloc.codegen(new SubExpr(
+                    new SubExpr(
+                        new SubExpr(new LoadExpr(new GlobalValue("v4")), new Numeric(22)),
+                        new SubExpr(new LoadExpr(new GlobalValue("v8")), new Numeric(11))),
+                    new SubExpr(
+                        new SubExpr(new LoadExpr(new GlobalValue("v12")), new Numeric(3)),
+                        new SubExpr(new LoadExpr(new GlobalValue("v16")), new Numeric(9))))));
+    }
 }

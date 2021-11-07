@@ -217,6 +217,7 @@ final class EmitX86 implements ExprAST.Visitor<Void> {
     public void emitSimpleBinaryInstr(ExprAST lhs, ExprAST rhs, BiFunction<String, String, List<String>> fn) {
         final List<String> spills = new ArrayList<>();
         if (this.freeRegs.size() < 2) {
+            int minSpillCount = 2 - this.freeRegs.size();
             final Set<String> hitset = new HashSet<>(this.freeRegs);
             for (final String r : this.registers) {
                 if (hitset.contains(r))
@@ -226,6 +227,9 @@ final class EmitX86 implements ExprAST.Visitor<Void> {
                 final int offset = this.shiftOffset();
                 this.instrs.add("mov [ebp-" + offset + "], " + r);
                 spills.add("mov " + r + ", [ebp-" + offset + "]");
+
+                if (--minSpillCount < 1)
+                    break;
             }
         }
 
