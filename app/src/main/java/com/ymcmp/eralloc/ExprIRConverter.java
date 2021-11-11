@@ -16,7 +16,7 @@ public final class ExprIRConverter implements ExprAST.Visitor<String> {
     private String allocate(ExprAST e) {
         final int sz = this.map.size();
         final int id = this.map.computeIfAbsent(e, k -> sz);
-        return "<" + id + ">";
+        return "%" + id;
     }
 
     @Override
