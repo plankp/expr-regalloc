@@ -4,6 +4,7 @@ import java.util.*;
 import java.util.function.Consumer;
 import com.ymcmp.eralloc.ir.*;
 import com.ymcmp.eralloc.ast.*;
+import static com.ymcmp.eralloc.ir.InstrName.Generic.*;
 
 public final class ExprIRConverter implements ExprAST.Visitor<IRValue> {
 
@@ -24,7 +25,7 @@ public final class ExprIRConverter implements ExprAST.Visitor<IRValue> {
     @Override
     public IRValue visitNumeric(Numeric e) {
         final IRReg c = this.allocate(e);
-        this.cb.accept(IRInstr.makev("copy", c, new IRImm(e.value)));
+        this.cb.accept(IRInstr.makev(COPY, c, new IRImm(e.value)));
 
         return c;
     }
@@ -33,7 +34,7 @@ public final class ExprIRConverter implements ExprAST.Visitor<IRValue> {
     public IRValue visitFrameIndex(FrameIndex e) {
         final IRReg c = this.allocate(e);
         final IRFrameIndex.Info info = this.frameInfos.computeIfAbsent(e.value, k -> this.ctx.newFrameIndex(4));
-        this.cb.accept(IRInstr.makev("copy", c, new IRFrameIndex(info, 0)));
+        this.cb.accept(IRInstr.makev(COPY, c, new IRFrameIndex(info, 0)));
 
         return c;
     }
@@ -41,7 +42,7 @@ public final class ExprIRConverter implements ExprAST.Visitor<IRValue> {
     @Override
     public IRValue visitGlobalValue(GlobalValue e) {
         final IRReg c = this.allocate(e);
-        this.cb.accept(IRInstr.makev("copy", c, new IRGlobal(e.value)));
+        this.cb.accept(IRInstr.makev(COPY, c, new IRGlobal(e.value)));
 
         return c;
     }
@@ -51,7 +52,7 @@ public final class ExprIRConverter implements ExprAST.Visitor<IRValue> {
         final IRValue ptr = e.ptr.accept(this);
 
         final IRReg c = this.allocate(e);
-        this.cb.accept(IRInstr.makev("load", c, ptr));
+        this.cb.accept(IRInstr.makev(LOAD, c, ptr));
 
         return c;
     }
@@ -62,8 +63,8 @@ public final class ExprIRConverter implements ExprAST.Visitor<IRValue> {
         final IRValue value = e.value.accept(this);
 
         final IRReg c = this.allocate(e);
-        this.cb.accept(IRInstr.makev("copy", c, value));
-        this.cb.accept(IRInstr.make("store", ptr, c));
+        this.cb.accept(IRInstr.makev(COPY, c, value));
+        this.cb.accept(IRInstr.make(STORE, ptr, c));
 
         return c;
     }
@@ -74,7 +75,7 @@ public final class ExprIRConverter implements ExprAST.Visitor<IRValue> {
         final IRValue rhs = e.rhs.accept(this);
 
         final IRReg c = this.allocate(e);
-        this.cb.accept(IRInstr.makev("add", c, lhs, rhs));
+        this.cb.accept(IRInstr.makev(ADD, c, lhs, rhs));
 
         return c;
     }
@@ -85,7 +86,7 @@ public final class ExprIRConverter implements ExprAST.Visitor<IRValue> {
         final IRValue rhs = e.rhs.accept(this);
 
         final IRReg c = this.allocate(e);
-        this.cb.accept(IRInstr.makev("sub", c, lhs, rhs));
+        this.cb.accept(IRInstr.makev(SUB, c, lhs, rhs));
 
         return c;
     }
@@ -96,7 +97,7 @@ public final class ExprIRConverter implements ExprAST.Visitor<IRValue> {
         final IRValue rhs = e.rhs.accept(this);
 
         final IRReg c = this.allocate(e);
-        this.cb.accept(IRInstr.makev("mul", c, lhs, rhs));
+        this.cb.accept(IRInstr.makev(MUL, c, lhs, rhs));
 
         return c;
     }
@@ -107,7 +108,7 @@ public final class ExprIRConverter implements ExprAST.Visitor<IRValue> {
         final IRValue rhs = e.rhs.accept(this);
 
         final IRReg c = this.allocate(e);
-        this.cb.accept(IRInstr.makev("div", c, lhs, rhs));
+        this.cb.accept(IRInstr.makev(DIV, c, lhs, rhs));
 
         return c;
     }
@@ -118,7 +119,7 @@ public final class ExprIRConverter implements ExprAST.Visitor<IRValue> {
         final IRValue rhs = e.rhs.accept(this);
 
         final IRReg c = this.allocate(e);
-        this.cb.accept(IRInstr.makev("rem", c, lhs, rhs));
+        this.cb.accept(IRInstr.makev(REM, c, lhs, rhs));
 
         return c;
     }
@@ -129,7 +130,7 @@ public final class ExprIRConverter implements ExprAST.Visitor<IRValue> {
         final IRValue rhs = e.rhs.accept(this);
 
         final IRReg c = this.allocate(e);
-        this.cb.accept(IRInstr.makev("shl", c, lhs, rhs));
+        this.cb.accept(IRInstr.makev(SHL, c, lhs, rhs));
 
         return c;
     }
@@ -140,7 +141,7 @@ public final class ExprIRConverter implements ExprAST.Visitor<IRValue> {
         final IRValue rhs = e.rhs.accept(this);
 
         final IRReg c = this.allocate(e);
-        this.cb.accept(IRInstr.makev("sra", c, lhs, rhs));
+        this.cb.accept(IRInstr.makev(SRA, c, lhs, rhs));
 
         return c;
     }
@@ -151,7 +152,7 @@ public final class ExprIRConverter implements ExprAST.Visitor<IRValue> {
         final IRValue rhs = e.rhs.accept(this);
 
         final IRReg c = this.allocate(e);
-        this.cb.accept(IRInstr.makev("srl", c, lhs, rhs));
+        this.cb.accept(IRInstr.makev(SRL, c, lhs, rhs));
 
         return c;
     }
@@ -164,7 +165,7 @@ public final class ExprIRConverter implements ExprAST.Visitor<IRValue> {
         info[0] = e.fn.accept(this);
 
         final IRReg c = this.allocate(e);
-        this.cb.accept(IRInstr.makev("call", c, info));
+        this.cb.accept(IRInstr.makev(CALL, c, info));
 
         return c;
     }

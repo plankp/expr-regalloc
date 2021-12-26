@@ -34,6 +34,7 @@ public final class LivenessAnalyzer {
 
     private final Target target;
     private final Map<RegName, List<LiveRange>> ranges = new HashMap<>();
+    private final UnionFind<RegName> tied = new UnionFind<>();
 
     public LivenessAnalyzer(Target target) {
         this.target = target;
@@ -109,6 +110,14 @@ public final class LivenessAnalyzer {
                 lst.add(pocket);
             }
 
+            for (final Map.Entry<Integer, Integer> pair : instr.opcode.getTiedDefs().entrySet()) {
+                final IRReg vdef = instr.defs.get(pair.getKey());
+                final IRReg vuse = (IRReg) instr.uses.get(pair.getValue());
+
+                // Mark the registers as tied.
+                this.tied.union(vdef.name, vuse.name);
+            }
+
             for (final IRValue use : instr.uses) {
                 if (!(use instanceof IRReg))
                     continue;
@@ -140,6 +149,29 @@ public final class LivenessAnalyzer {
 
     public List<LiveRange> getLiveRanges(RegName reg) {
         return Collections.unmodifiableList(this.ranges.get(reg));
+    }
+
+    public List<Set<RegName>> getRegGroups() {
+        final List<Set<RegName>> ret = new ArrayList<>();
+        final Map<RegName, Set<RegName>> revTied = new HashMap<>();
+        for (final RegName reg : this.getRegs()) {
+            final RegName tiedKey = this.tied.root(reg);
+            if (tiedKey == null) {
+                ret.add(Collections.singleton(reg));
+                continue;
+            }
+
+            Set<RegName> set = revTied.get(tiedKey);
+            if (set == null) {
+                set = new HashSet<>();
+                revTied.put(tiedKey, set);
+                ret.add(set);
+            }
+
+            set.add(reg);
+        }
+
+        return ret;
     }
 
     @Override

@@ -2,6 +2,7 @@ package com.ymcmp.eralloc;
 
 import java.util.*;
 import com.ymcmp.eralloc.ir.*;
+import static com.ymcmp.eralloc.ir.InstrName.Generic.*;
 
 public final class X86Legalizer {
 
@@ -12,17 +13,17 @@ public final class X86Legalizer {
         final ListIterator<IRInstr> it = block.listIterator();
         while (it.hasNext()) {
             final IRInstr inst = it.next();
-            switch (inst.opcode) {
-            case "add":
-                this.rewriteTwoAddress(it, "X86::add", inst);
+            switch ((InstrName.Generic) inst.opcode) {
+            case ADD:
+                this.rewriteTwoAddress(it, X86Instr.ADD, inst);
                 break;
-            case "sub":
-                this.rewriteTwoAddress(it, "X86::sub", inst);
+            case SUB:
+                this.rewriteTwoAddress(it, X86Instr.SUB, inst);
                 break;
-            case "mul":
-                this.rewriteTwoAddress(it, "X86::imul", inst);
+            case MUL:
+                this.rewriteTwoAddress(it, X86Instr.IMUL, inst);
                 break;
-            case "div": {
+            case DIV: {
                 // transforms
                 //   %z = div %a, %b
                 // into
@@ -32,48 +33,44 @@ public final class X86Legalizer {
                 //   %z = copy eax
                 final IRReg rEAX = new IRReg(X86Register.EAX);
                 final IRReg rEDX = new IRReg(X86Register.EDX);
-                it.set(IRInstr.makev("copy", rEAX, inst.uses.get(0)));
-                it.add(IRInstr.of("X86::cdq")
+                it.set(IRInstr.makev(COPY, rEAX, inst.uses.get(0)));
+                it.add(IRInstr.of(X86Instr.CDQ)
                         .addDefs(rEDX, rEAX)
                         .addUse(rEAX)
                         .build());
-                it.add(IRInstr.of("X86::idiv")
+                it.add(IRInstr.of(X86Instr.IDIV)
                         .addDefs(rEDX, rEAX)
                         .addUses(rEDX, rEAX, inst.uses.get(1))
                         .build());
-                it.add(IRInstr.of("copy")
+                it.add(IRInstr.of(COPY)
                         .addDefs(inst.defs.get(0))
                         .addUse(rEAX)
                         .build());
                 break;
             }
-            case "shl": {
+            case SHL: {
                 // transforms
                 //   %z = shl %a, %b
                 // into
-                //   %z = copy %a
                 //   ecx = copy %b
-                //   %z = X86::op %z, cl
+                //   %z = X86::shl %a, cl
 
                 final IRReg rECX = new IRReg(X86Register.ECX);
                 final IRReg rCL = new IRReg(X86Register.CL);
-                it.set(IRInstr.makev("copy", inst.defs.get(0), inst.uses.get(0)));
-                it.add(IRInstr.makev("copy", rECX, inst.uses.get(1)));
-                it.add(IRInstr.makev("x86::shl", inst.defs.get(0), inst.defs.get(0), rCL));
+                it.set(IRInstr.makev(COPY, rECX, inst.uses.get(1)));
+                it.add(IRInstr.makev(X86Instr.SHL, inst.defs.get(0), inst.uses.get(0), rCL));
                 break;
             }
             }
         }
     }
 
-    private void rewriteTwoAddress(ListIterator<IRInstr> it, String opcode, IRInstr inst) {
+    private void rewriteTwoAddress(ListIterator<IRInstr> it, X86Instr opcode, IRInstr inst) {
         // transforms
         //   %z = op %a, %b
         // into
-        //   %z = copy %a
-        //   %z = X86::op %z, %b
+        //   %z = X86::op %a, %b
 
-        it.set(IRInstr.makev("copy", inst.defs.get(0), inst.uses.get(0)));
-        it.add(IRInstr.makev(opcode, inst.defs.get(0), inst.defs.get(0), inst.uses.get(1)));
+        it.set(IRInstr.makev(opcode, inst.defs.get(0), inst.uses.get(0), inst.uses.get(1)));
     }
 }

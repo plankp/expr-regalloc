@@ -6,11 +6,11 @@ public final class IRInstr {
 
     public static final class Builder {
 
-        private final String opcode;
+        private final InstrName opcode;
         private final List<IRReg> defs = new ArrayList<>();
         private final List<IRValue> uses = new ArrayList<>();
 
-        public Builder(String opcode) {
+        public Builder(InstrName opcode) {
             this.opcode = opcode;
         }
 
@@ -49,25 +49,25 @@ public final class IRInstr {
         }
     }
 
-    public final String opcode;
+    public final InstrName opcode;
     public final List<IRReg> defs;
     public final List<IRValue> uses;
 
-    private IRInstr(String opcode, List<IRReg> defs, List<IRValue> uses) {
+    private IRInstr(InstrName opcode, List<IRReg> defs, List<IRValue> uses) {
         this.opcode = opcode;
         this.defs = defs;
         this.uses = uses;
     }
 
-    public static Builder of(String opcode) {
+    public static Builder of(InstrName opcode) {
         return new Builder(opcode);
     }
 
-    public static IRInstr makev(String opcode, IRReg out, IRValue... in) {
+    public static IRInstr makev(InstrName opcode, IRReg out, IRValue... in) {
         return of(opcode).addDef(out).addUses(in).build();
     }
 
-    public static IRInstr make(String opcode, IRValue... in) {
+    public static IRInstr make(InstrName opcode, IRValue... in) {
         return of(opcode).addUses(in).build();
     }
 
