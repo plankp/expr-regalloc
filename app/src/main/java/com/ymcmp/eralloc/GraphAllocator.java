@@ -4,6 +4,7 @@ import java.math.*;
 import java.util.*;
 import java.util.stream.*;
 import com.ymcmp.eralloc.ir.*;
+import com.ymcmp.eralloc.target.generic.GenericOpcode;
 
 public class GraphAllocator {
 
@@ -19,9 +20,9 @@ public class GraphAllocator {
     public static final class InterferenceGraph {
 
         private final Graph<Object> g;
-        private final Map<RegName, Object> map;
+        private final Map<Register, Object> map;
 
-        private InterferenceGraph(Graph<Object> g, Map<RegName, Object> map) {
+        private InterferenceGraph(Graph<Object> g, Map<Register, Object> map) {
             this.g = g;
             this.map = map;
         }
@@ -33,30 +34,30 @@ public class GraphAllocator {
     }
 
     private final IRContext ctx;
-    private final Target target;
 
-    public GraphAllocator(IRContext ctx, Target target) {
+    public GraphAllocator(IRContext ctx) {
         this.ctx = ctx;
-        this.target = target;
     }
 
-    public void allocate(List<IRInstr> block) {
-        final HashSet<RegName> spilled = new HashSet<>();
+    public void allocate(IRFunction fn) {
+        new PHIRemover(this.ctx).convert(fn);
+
+        final HashSet<Register> spilled = new HashSet<>();
 
         while (true) {
-            final LivenessAnalyzer lr = new LivenessAnalyzer(this.target);
-            lr.compute(block);
+            final LivenessAnalyzer lr = new LivenessAnalyzer();
+            lr.compute(fn);
 
             final InterferenceGraph g = this.buildGraph(lr);
 
             try {
-                this.applyAssignment(block, g, this.colorGraph(g));
+                this.applyAssignment(fn, g, this.colorGraph(g));
                 return;
             } catch (SpillRequiredException ex) {
-                RegName spill = null;
+                Register spill = null;
                 int maximum = -1;
-                for (final RegName reg : lr.getRegs()) {
-                    if (reg instanceof RegName.Physical)
+                for (final Register reg : lr.getRegs()) {
+                    if (reg instanceof Register.Physical)
                         continue; // you cannot spill physical registers!
                     if (spilled.contains(reg))
                         continue; // already spilled this one, try another one.
@@ -67,16 +68,18 @@ public class GraphAllocator {
                         continue; // not a candidate for spilling!
 
                     // Compute the spill factor
-                    int start = Integer.MAX_VALUE;
-                    int end = Integer.MIN_VALUE;
+                    final Map<IRBlock, int[]> map = new HashMap<>();
                     for (final LivenessAnalyzer.LiveRange range : lr.getLiveRanges(reg)) {
-                        start = Math.min(start, range.def);
-                        end = Math.max(end, range.lastUse);
+                        final int[] tuple = map.computeIfAbsent(range.block, k -> new int[] { Integer.MAX_VALUE, Integer.MIN_VALUE });
+                        tuple[0] = Math.min(tuple[0], range.start);
+                        tuple[1] = Math.max(tuple[1], range.end);
                     }
 
                     // TODO: take number of uses (frequency) into account
-
-                    final int factor = occurrences * (end - start + 1);
+                    final int distance = map.values().stream()
+                            .mapToInt(tuple -> tuple[1] - tuple[0] + 1)
+                            .sum();
+                    final int factor = occurrences * distance;
                     if (factor > maximum) {
                         spill = reg;
                         maximum = factor;
@@ -88,29 +91,29 @@ public class GraphAllocator {
                     throw new AssertionError("We cannot allocate the provided code");
 
                 spilled.add(spill);
-                this.spill(block, Collections.singleton(spill));
+                this.spill(fn, Collections.singleton(spill));
             }
         }
     }
 
     public InterferenceGraph buildGraph(LivenessAnalyzer lr) {
         final Graph<Object> g = new Graph<>();
-        final Map<RegName, Object> map = new HashMap<>();
+        final Map<Register, Object> map = new HashMap<>();
 
         // use BigInteger as the vertex names just for visual sanity purposes.
         BigInteger counter = BigInteger.ZERO;
-        for (final Set<RegName> group : lr.getRegGroups()) {
+        for (final Set<Register> group : lr.getRegGroups()) {
             final Object vertex = counter;
             counter = counter.add(BigInteger.ONE);
             g.addNode(vertex);
 
             // all registers of the same group are tied and, therefore, must
             // share the same graph vertex.
-            for (final RegName reg : group)
+            for (final Register reg : group)
                 map.put(reg, vertex);
         }
 
-        final RegName[] regs = map.keySet().toArray(new RegName[0]);
+        final Register[] regs = map.keySet().toArray(new Register[0]);
         for (int i = 0; i < regs.length; ++i) {
             outer:
             for (int j = i + 1; j < regs.length; ++j) {
@@ -123,8 +126,8 @@ public class GraphAllocator {
 
                 // two distinct physical registers must share an edge.
                 // (distinctness is already enforced by analyzer)
-                if ((regs[i] instanceof RegName.Physical)
-                        && (regs[j] instanceof RegName.Physical)) {
+                if ((regs[i] instanceof Register.Physical)
+                        && (regs[j] instanceof Register.Physical)) {
                     g.addEdge(node1, node2);
                     continue outer;
                 }
@@ -147,8 +150,8 @@ public class GraphAllocator {
         return new InterferenceGraph(g, map);
     }
 
-    public Map<Object, RegName.Physical> colorGraph(final InterferenceGraph g) throws SpillRequiredException {
-        final Map<Object, RegName.Physical> assignment = new HashMap<>();
+    public Map<Object, Register.Physical> colorGraph(final InterferenceGraph g) throws SpillRequiredException {
+        final Map<Object, Register.Physical> assignment = new HashMap<>();
         final Map<Object, Long> priority = new HashMap<>();
         final Map<Object, RegisterType> regType = new HashMap<>();
 
@@ -162,30 +165,30 @@ public class GraphAllocator {
         final Map<Object, Integer> spillCandidates = new HashMap<>();
 
         // Populate the queue, vreg type and precolor if necessary
-        for (final Map.Entry<RegName, Object> mapping : g.map.entrySet()) {
-            final RegName reg = mapping.getKey();
+        for (final Map.Entry<Register, Object> mapping : g.map.entrySet()) {
+            final Register reg = mapping.getKey();
             final Object node = mapping.getValue();
 
-            if (reg instanceof RegName.Virtual) {
+            if (reg instanceof Register.Virtual) {
                 if (regType.putIfAbsent(node, reg.getInfo()) == null)
                     // make sure each node only appears once in the queue.
                     queue.add(node);
                 continue;
             }
 
-            assignment.put(node, (RegName.Physical) reg);
+            assignment.put(node, (Register.Physical) reg);
             for (final Object next : g.g.getNeighbours(node))
                 priority.put(next, priority.getOrDefault(next, 0L) + 1);
         }
 
         while (!queue.isEmpty()) {
             final Object node = queue.poll();
-            final Set<RegName.Physical> used = g.g.getNeighbours(node)
+            final Set<Register.Physical> used = g.g.getNeighbours(node)
                     .stream()
                     .map(assignment::get)
                     .filter(x -> x != null)
                     .collect(Collectors.toSet());
-            final Optional<RegName.Physical> color = regType.get(node).getRegs()
+            final Optional<Register.Physical> color = regType.get(node).getRegs()
                     .stream()
                     .filter(r1 -> {
                         return used.stream().noneMatch(r2 -> this.aliases(r1, r2));
@@ -216,109 +219,116 @@ public class GraphAllocator {
         return assignment;
     }
 
-    private boolean aliases(RegName.Physical r1, RegName.Physical r2) {
+    private boolean aliases(Register.Physical r1, Register.Physical r2) {
         return isParentReg(r1, r2) || isParentReg(r2, r1);
     }
 
-    private boolean isParentReg(RegName.Physical parent, RegName.Physical sub) {
+    private boolean isParentReg(Register.Physical parent, Register.Physical sub) {
         for (; sub != null; sub = sub.getParent())
             if (sub.equals(parent))
                 return true;
         return false;
     }
 
-    public void spill(List<IRInstr> block, Set<RegName> regs) {
-        final Map<RegName, IRFrameIndex> slots = new HashMap<>();
-        for (final RegName reg : regs)
+    public void spill(IRFunction fn, Set<Register> regs) {
+        final Map<Register, IRFrameIndex> slots = new HashMap<>();
+        for (final Register reg : regs)
             slots.put(reg, new IRFrameIndex(this.ctx.newFrameIndex(reg.getInfo().width()), 0));
 
-        final ListIterator<IRInstr> it = block.listIterator();
-        while (it.hasNext()) {
-            final IRInstr instr = it.next();
-            final IRInstr.Builder builder = IRInstr.of(instr.opcode);
+        for (final IRBlock block : fn) {
+            if (!block.inputs.isEmpty())
+                throw new UnsupportedOperationException("Spill with phis are not supported yet");
 
-            // Example:
-            //   d1, d2, ... = INSTR s1, s2, ...
-            //
-            // Say all d's and s's are registers needed to be spilled:
-            //   n1 = RELOAD (FRAME)
-            //   n2 = RELOAD (FRAME)
-            //   ...
-            //   d1, d2, ... = INSTR n1, n2, ...
-            //   SAVE (FRAME), d1
-            //   SAVE (FRAME), d2
-            //   ...
-            //
-            // and n's are freshly generated temporaries.
+            final ListIterator<IRInstr> it = block.iterator();
+            while (it.hasNext()) {
+                final IRInstr instr = it.next();
+                final IRInstr.Builder builder = IRInstr.of(instr.opcode);
 
-            it.previous(); // assume we need to insert RELOAD's
-            boolean modded = false;
-            for (final IRValue v : instr.uses) {
-                if (v instanceof IRReg) {
-                    final IRReg r = (IRReg) v;
-                    if (slots.containsKey(r.name)) {
-                        modded = true;
+                // Example:
+                //   d1, d2, ... = INSTR s1, s2, ...
+                //
+                // Say all d's and s's are registers needed to be spilled:
+                //   n1 = RELOAD (FRAME)
+                //   n2 = RELOAD (FRAME)
+                //   ...
+                //   d1, d2, ... = INSTR n1, n2, ...
+                //   SAVE (FRAME), d1
+                //   SAVE (FRAME), d2
+                //   ...
+                //
+                // and n's are freshly generated temporaries.
 
-                        // generate fresh temporary
-                        final IRReg fresh = new IRReg(this.ctx.newVReg(r.name.getInfo()));
-                        builder.addUse(fresh);
+                it.previous(); // assume we need to insert RELOAD's
+                boolean modded = false;
+                for (final IRValue v : instr.uses) {
+                    if (v instanceof IRReg) {
+                        final IRReg r = (IRReg) v;
+                        if (slots.containsKey(r.name)) {
+                            modded = true;
 
-                        // reload into the fresh temporary
-                        it.add(IRInstr.of(InstrName.Generic.RELOAD)
-                                .addDef(fresh)
-                                .addUse(slots.get(r.name))
-                                .build());
-                        continue;
+                            // generate fresh temporary
+                            final IRReg fresh = new IRReg(this.ctx.newVReg(r.name.getInfo()));
+                            builder.addUse(fresh);
+
+                            // reload into the fresh temporary
+                            it.add(IRInstr.of(GenericOpcode.RELOAD)
+                                    .addDef(fresh)
+                                    .addUse(slots.get(r.name))
+                                    .build());
+                            continue;
+                        }
                     }
+
+                    builder.addUse(v);
                 }
 
-                builder.addUse(v);
+                it.next();
+
+                if (modded) {
+                    builder.addDefs(instr.defs);
+                    it.set(builder.build());
+                }
+
+                for (final IRReg r : instr.defs)
+                    if (slots.containsKey(r.name))
+                        it.add(IRInstr.of(GenericOpcode.SAVE)
+                                .addUse(slots.get(r.name))
+                                .addUse(r)
+                                .build());
             }
-
-            it.next();
-
-            if (modded) {
-                builder.addDefs(instr.defs);
-                it.set(builder.build());
-            }
-
-            for (final IRReg r : instr.defs)
-                if (slots.containsKey(r.name))
-                    it.add(IRInstr.of(InstrName.Generic.SAVE)
-                            .addUse(slots.get(r.name))
-                            .addUse(r)
-                            .build());
         }
     }
 
-    public void applyAssignment(List<IRInstr> block, InterferenceGraph g, Map<Object, RegName.Physical> assignment) {
-        final ListIterator<IRInstr> it = block.listIterator();
-        while (it.hasNext()) {
-            final IRInstr instr = it.next();
-            final IRInstr.Builder builder = IRInstr.of(instr.opcode);
+    public void applyAssignment(IRFunction fn, InterferenceGraph g, Map<Object, Register.Physical> assignment) {
+        for (final IRBlock block : fn) {
+            final ListIterator<IRInstr> it = block.iterator();
+            while (it.hasNext()) {
+                final IRInstr instr = it.next();
+                final IRInstr.Builder builder = IRInstr.of(instr.opcode);
 
-            for (final IRReg r : instr.defs) {
-                if (r.name instanceof RegName.Virtual) {
-                    builder.addDef(new IRReg(assignment.get(g.map.get(r.name))));
-                    continue;
-                }
-
-                builder.addDef(r);
-            }
-
-            for (final IRValue v : instr.uses) {
-                if (v instanceof IRReg) {
-                    final IRReg r = (IRReg) v;
-                    if (r.name instanceof RegName.Virtual) {
-                        builder.addUse(new IRReg(assignment.get(g.map.get(r.name))));
+                for (final IRReg r : instr.defs) {
+                    if (r.name instanceof Register.Virtual) {
+                        builder.addDef(new IRReg(assignment.get(g.map.get(r.name))));
                         continue;
                     }
+
+                    builder.addDef(r);
                 }
 
-                builder.addUse(v);
-            }
+                for (final IRValue v : instr.uses) {
+                    if (v instanceof IRReg) {
+                        final IRReg r = (IRReg) v;
+                        if (r.name instanceof Register.Virtual) {
+                            builder.addUse(new IRReg(assignment.get(g.map.get(r.name))));
+                            continue;
+                        }
+                    }
 
-            it.set(builder.build());
+                    builder.addUse(v);
+                }
+
+                it.set(builder.build());
+            }
         }
     }
 }

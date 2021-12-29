@@ -2,9 +2,9 @@ package com.ymcmp.eralloc.ir;
 
 public final class IRReg implements IRValue {
 
-    public final RegName name;
+    public final Register name;
 
-    public IRReg(RegName name) {
+    public IRReg(Register name) {
         if (name == null)
             throw new IllegalArgumentException("Register name cannot be null");
 

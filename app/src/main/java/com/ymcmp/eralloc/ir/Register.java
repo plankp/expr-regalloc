@@ -4,30 +4,36 @@ import java.math.BigInteger;
 import java.util.*;
 import com.ymcmp.eralloc.RegisterType;
 
-public interface RegName {
+public interface Register {
 
     public RegisterType getInfo();
 
-    public interface Physical extends RegName {
+    public interface Physical extends Register {
 
-        public default RegName.Physical getParent() {
+        public default Register.Physical getParent() {
             return null;
         }
 
-        public default Set<RegName.Physical> getSubregs() {
+        public default Set<Register.Physical> getSubregs() {
             return Collections.emptySet();
         }
     }
 
-    public final class Virtual implements RegName {
+    public final class Virtual implements Register {
 
         private final BigInteger id;
         private final RegisterType info;
+
+        private String name;
 
         protected Virtual(BigInteger id, RegisterType info) {
             // get this via an IRContext
             this.id = id;
             this.info = info;
+        }
+
+        public void setName(String name) {
+            this.name = name;
         }
 
         @Override
@@ -37,7 +43,12 @@ public interface RegName {
 
         @Override
         public String toString() {
-            return '%' + this.id.toString();
+            final StringBuilder sb = new StringBuilder();
+            sb.append('%');
+            if (this.name != null)
+                sb.append(this.name);
+            sb.append(this.id);
+            return sb.toString();
         }
     }
 }

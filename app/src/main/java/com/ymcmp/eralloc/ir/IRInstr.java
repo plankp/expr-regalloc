@@ -6,11 +6,11 @@ public final class IRInstr {
 
     public static final class Builder {
 
-        private final InstrName opcode;
+        private final Opcode opcode;
         private final List<IRReg> defs = new ArrayList<>();
         private final List<IRValue> uses = new ArrayList<>();
 
-        public Builder(InstrName opcode) {
+        public Builder(Opcode opcode) {
             this.opcode = opcode;
         }
 
@@ -33,7 +33,7 @@ public final class IRInstr {
             return this;
         }
 
-        public Builder addUses(List<IRValue> uses) {
+        public Builder addUses(List<? extends IRValue> uses) {
             this.uses.addAll(uses);
             return this;
         }
@@ -43,32 +43,28 @@ public final class IRInstr {
         }
 
         public IRInstr build() {
-            final List<IRReg> pdefs = defs.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(new ArrayList<>(defs));
-            final List<IRValue> puses = uses.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(new ArrayList<>(uses));
+            final ArrayList<IRReg> pdefs = new ArrayList<>(defs);
+            pdefs.trimToSize();
+
+            final ArrayList<IRValue> puses = new ArrayList<>(uses);
+            puses.trimToSize();
+
             return new IRInstr(opcode, pdefs, puses);
         }
     }
 
-    public final InstrName opcode;
+    public final Opcode opcode;
     public final List<IRReg> defs;
     public final List<IRValue> uses;
 
-    private IRInstr(InstrName opcode, List<IRReg> defs, List<IRValue> uses) {
+    private IRInstr(Opcode opcode, List<IRReg> defs, List<IRValue> uses) {
         this.opcode = opcode;
         this.defs = defs;
         this.uses = uses;
     }
 
-    public static Builder of(InstrName opcode) {
+    public static Builder of(Opcode opcode) {
         return new Builder(opcode);
-    }
-
-    public static IRInstr makev(InstrName opcode, IRReg out, IRValue... in) {
-        return of(opcode).addDef(out).addUses(in).build();
-    }
-
-    public static IRInstr make(InstrName opcode, IRValue... in) {
-        return of(opcode).addUses(in).build();
     }
 
     @Override

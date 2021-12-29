@@ -1,9 +1,10 @@
-package com.ymcmp.eralloc;
+package com.ymcmp.eralloc.target.x86;
 
 import java.util.*;
-import com.ymcmp.eralloc.ir.RegName;
+import com.ymcmp.eralloc.*;
+import com.ymcmp.eralloc.ir.Register;
 
-public enum X86Register implements RegName.Physical {
+public enum X86Register implements Register.Physical {
 
     EAX {
         @Override
@@ -12,7 +13,7 @@ public enum X86Register implements RegName.Physical {
         }
 
         @Override
-        public Set<RegName.Physical> getSubregs() {
+        public Set<Register.Physical> getSubregs() {
             return Collections.unmodifiableSet(EnumSet.of(AX));
         }
     },
@@ -24,7 +25,7 @@ public enum X86Register implements RegName.Physical {
         }
 
         @Override
-        public Set<RegName.Physical> getSubregs() {
+        public Set<Register.Physical> getSubregs() {
             return Collections.unmodifiableSet(EnumSet.of(BX));
         }
     },
@@ -36,7 +37,7 @@ public enum X86Register implements RegName.Physical {
         }
 
         @Override
-        public Set<RegName.Physical> getSubregs() {
+        public Set<Register.Physical> getSubregs() {
             return Collections.unmodifiableSet(EnumSet.of(CX));
         }
     },
@@ -48,7 +49,7 @@ public enum X86Register implements RegName.Physical {
         }
 
         @Override
-        public Set<RegName.Physical> getSubregs() {
+        public Set<Register.Physical> getSubregs() {
             return Collections.unmodifiableSet(EnumSet.of(DX));
         }
     },
@@ -60,7 +61,7 @@ public enum X86Register implements RegName.Physical {
         }
 
         @Override
-        public Set<RegName.Physical> getSubregs() {
+        public Set<Register.Physical> getSubregs() {
             return Collections.unmodifiableSet(EnumSet.of(DI));
         }
     },
@@ -72,7 +73,7 @@ public enum X86Register implements RegName.Physical {
         }
 
         @Override
-        public Set<RegName.Physical> getSubregs() {
+        public Set<Register.Physical> getSubregs() {
             return Collections.unmodifiableSet(EnumSet.of(SI));
         }
     },
@@ -84,12 +85,12 @@ public enum X86Register implements RegName.Physical {
         }
 
         @Override
-        public RegName.Physical getParent() {
+        public Register.Physical getParent() {
             return EAX;
         }
 
         @Override
-        public Set<RegName.Physical> getSubregs() {
+        public Set<Register.Physical> getSubregs() {
             return Collections.unmodifiableSet(EnumSet.of(AL));
         }
     },
@@ -101,12 +102,12 @@ public enum X86Register implements RegName.Physical {
         }
 
         @Override
-        public RegName.Physical getParent() {
+        public Register.Physical getParent() {
             return EBX;
         }
 
         @Override
-        public Set<RegName.Physical> getSubregs() {
+        public Set<Register.Physical> getSubregs() {
             return Collections.unmodifiableSet(EnumSet.of(BL));
         }
     },
@@ -118,12 +119,12 @@ public enum X86Register implements RegName.Physical {
         }
 
         @Override
-        public RegName.Physical getParent() {
+        public Register.Physical getParent() {
             return ECX;
         }
 
         @Override
-        public Set<RegName.Physical> getSubregs() {
+        public Set<Register.Physical> getSubregs() {
             return Collections.unmodifiableSet(EnumSet.of(CL));
         }
     },
@@ -135,12 +136,12 @@ public enum X86Register implements RegName.Physical {
         }
 
         @Override
-        public RegName.Physical getParent() {
+        public Register.Physical getParent() {
             return EDX;
         }
 
         @Override
-        public Set<RegName.Physical> getSubregs() {
+        public Set<Register.Physical> getSubregs() {
             return Collections.unmodifiableSet(EnumSet.of(DL));
         }
     },
@@ -152,7 +153,7 @@ public enum X86Register implements RegName.Physical {
         }
 
         @Override
-        public RegName.Physical getParent() {
+        public Register.Physical getParent() {
             return EDI;
         }
     },
@@ -164,7 +165,7 @@ public enum X86Register implements RegName.Physical {
         }
 
         @Override
-        public RegName.Physical getParent() {
+        public Register.Physical getParent() {
             return ESI;
         }
     },
@@ -176,7 +177,7 @@ public enum X86Register implements RegName.Physical {
         }
 
         @Override
-        public RegName.Physical getParent() {
+        public Register.Physical getParent() {
             return AX;
         }
     },
@@ -188,7 +189,7 @@ public enum X86Register implements RegName.Physical {
         }
 
         @Override
-        public RegName.Physical getParent() {
+        public Register.Physical getParent() {
             return BX;
         }
     },
@@ -200,7 +201,7 @@ public enum X86Register implements RegName.Physical {
         }
 
         @Override
-        public RegName.Physical getParent() {
+        public Register.Physical getParent() {
             return CX;
         }
     },
@@ -212,8 +213,15 @@ public enum X86Register implements RegName.Physical {
         }
 
         @Override
-        public RegName.Physical getParent() {
+        public Register.Physical getParent() {
             return DX;
+        }
+    },
+    
+    EFLAGS {
+        @Override
+        public RegisterType getInfo() {
+            return X86RegisterType.FLAGS;
         }
     };
 }

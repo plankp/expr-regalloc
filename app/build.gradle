@@ -1,4 +1,5 @@
 plugins {
+    id 'antlr'
     id 'application'
 }
 
@@ -7,11 +8,21 @@ repositories {
 }
 
 dependencies {
+    antlr 'org.antlr:antlr4:4.9.+'
+
     testImplementation 'org.junit.jupiter:junit-jupiter:5.7.2'
 }
 
 application {
     mainClass = 'com.ymcmp.eralloc.App'
+}
+
+run {
+    standardInput = System.in
+}
+
+generateGrammarSource {
+    arguments += [ '-visitor', '-no-listener' ]
 }
 
 tasks.named('test') {

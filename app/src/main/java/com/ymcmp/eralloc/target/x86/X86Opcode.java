@@ -1,16 +1,22 @@
-package com.ymcmp.eralloc;
+package com.ymcmp.eralloc.target.x86;
 
 import java.util.*;
-import com.ymcmp.eralloc.ir.InstrName;
+import com.ymcmp.eralloc.ir.Opcode;
 
-public enum X86Instr implements InstrName {
+public enum X86Opcode implements Opcode {
 
     ADD,
     SUB,
     IMUL,
     CDQ,
     IDIV,
-    SHL;
+    SHL,
+    CMP,
+    PUSH,
+    POP,
+
+    // temporary hack
+    PLOAD;
 
     @Override
     public String toString() {

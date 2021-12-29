@@ -1,10 +1,25 @@
-package com.ymcmp.eralloc;
+package com.ymcmp.eralloc.target.x86;
 
 import java.util.*;
-import com.ymcmp.eralloc.ir.RegName;
-import static com.ymcmp.eralloc.X86Register.*;
+import com.ymcmp.eralloc.*;
+import com.ymcmp.eralloc.ir.Register;
+import static com.ymcmp.eralloc.target.x86.X86Register.*;
 
 public enum X86RegisterType implements RegisterType {
+
+    FLAGS {
+        @Override
+        public int width() {
+            // uhh let's say...
+            // XXX: Maybe the way to go is to remove width from here...
+            return 1;
+        }
+
+        @Override
+        public Collection<Register.Physical> getRegs() {
+            return Collections.singleton(EFLAGS);
+        }
+    },
 
     GR8 {
         @Override
@@ -13,7 +28,7 @@ public enum X86RegisterType implements RegisterType {
         }
 
         @Override
-        public Collection<RegName.Physical> getRegs() {
+        public Collection<Register.Physical> getRegs() {
             return Collections.unmodifiableList(Arrays.asList(
                 AL, CL, DL, BL));
         }
@@ -26,7 +41,7 @@ public enum X86RegisterType implements RegisterType {
         }
 
         @Override
-        public Collection<RegName.Physical> getRegs() {
+        public Collection<Register.Physical> getRegs() {
             return Collections.unmodifiableList(Arrays.asList(
                 AX, CX, DX, SI, DI, BX));
         }
@@ -39,7 +54,7 @@ public enum X86RegisterType implements RegisterType {
         }
 
         @Override
-        public Collection<RegName.Physical> getRegs() {
+        public Collection<Register.Physical> getRegs() {
             return Collections.unmodifiableList(Arrays.asList(
                 // EAX, ECX, EDX, ESI, EDI, EBX));
                 EAX, ECX, EDX/*, ESI, EDI, EBX*/));
